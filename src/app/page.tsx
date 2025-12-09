@@ -14,6 +14,11 @@ import {
 } from "lucide-react";
 import { PokerTable } from "@/components/poker/PokerTable";
 import { WalletPanel } from "@/components/wallet/WalletPanel";
+import { TournamentWorkflow } from "@/components/sections/TournamentWorkflow";
+import { BlindStructure } from "@/components/sections/BlindStructure";
+import { PayoutMatrix } from "@/components/sections/PayoutMatrix";
+import { LeaderboardPanel } from "@/components/sections/LeaderboardPanel";
+import { RebuyLateEntry } from "@/components/sections/RebuyLateEntry";
 
 const features: { title: string; description: string; Icon: LucideIcon; accent: string }[] = [
   {
@@ -56,7 +61,7 @@ const timeline = [
 
 export default function Home() {
   return (
-    <div className="relative min-h-screen overflow-hidden px-6 pb-28 pt-8 sm:px-10 lg:px-16">
+    <div className="relative min-h-screen overflow-hidden px-4 pb-28 pt-8 sm:px-8 lg:px-16">
       <div className="floating-chip" style={{ top: "12%", right: "12%" }} />
       <div className="floating-chip" style={{ bottom: "18%", left: "16%" }} />
       <div className="floating-chip" style={{ top: "45%", left: "48%" }} />
@@ -213,6 +218,18 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <TournamentWorkflow />
+
+        <div className="mt-16 grid gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+          <BlindStructure />
+          <PayoutMatrix />
+        </div>
+
+        <div className="mt-10 grid gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+          <LeaderboardPanel />
+          <RebuyLateEntry />
+        </div>
       </div>
     </div>
   );
