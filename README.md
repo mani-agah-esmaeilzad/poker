@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Nebula Hold'em
 
-## Getting Started
+A cinematic Texas Hold'em experience built with Next.js (frontend) and an Express-based poker engine (backend). The backend stores its state inside JSON files so you can run everything locally without any external database.
 
-First, run the development server:
+## Requirements
+
+- Node.js 18+
+- npm 9+
+
+## Project structure
+
+```
+poker/
+├── server/              # Express poker engine + JSON data store
+│   ├── data/            # users.json + table.json (acts as DB)
+│   └── src/             # game engine + HTTP routes
+└── src/                 # Next.js frontend
+```
+
+## Running the backend
+
+```bash
+npm run server          # runs nodemon in server/
+```
+
+The engine starts on [http://localhost:4000](http://localhost:4000) and exposes:
+
+- `POST /login` — validates email/password from `server/data/users.json`
+- `GET /table` — returns sanitized table state
+- `POST /table/new-hand` — shuffles and starts a brand-new hand
+- `POST /table/action` — executes hero actions (`fold`, `call`, `raise`, `check`, `bet`)
+
+State is persisted to `server/data/table.json`, so you can stop/restart the engine without losing stacks.
+
+## Running the frontend
+
+In a separate terminal:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Frontend: http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The frontend reads `NEXT_PUBLIC_API_BASE` (defaults to `http://localhost:4000`). If you run the backend on a different port, set it inside `.env.local`:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+NEXT_PUBLIC_API_BASE=http://localhost:5000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Demo login
 
-## Learn More
+Use the built-in demo player:
 
-To learn more about Next.js, take a look at the following resources:
+```
+Email:    pilot@nebula.gg
+Password: nebula123
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+After logging in you'll see a session badge in the hero bar and the poker table will stream real game state from the backend. The action panel lets you fold/call/raise/check/bet, and the engine will advance the hand, deal streets, and evaluate winners.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Available scripts
 
-## Deploy on Vercel
+| Command | Description |
+| --- | --- |
+| `npm run server` | Start the Express poker engine with nodemon |
+| `npm run server:start` | Start the engine without nodemon |
+| `npm run dev` | Run the Next.js frontend |
+| `npm run build` | Build the frontend for production |
+| `npm run lint` | Run ESLint across the repo |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- All gameplay data (users, table state, logs) lives in plain JSON files. Feel free to tweak them manually or seed new users.
+- The poker engine deals realistic cards, auto-plays the bots, and evaluates showdowns using `poker-hand-evaluator`.
+- Frontend and backend are decoupled via HTTP so you can host them separately if needed.

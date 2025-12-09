@@ -1,123 +1,115 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Flame, Sparkles, Timer, Trophy } from "lucide-react";
+import {
+  AlertTriangle,
+  Flame,
+  Loader2,
+  Sparkles,
+  Timer,
+  Trophy,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
+import {
+  fetchTableState,
+  requestHeroAction,
+  requestNewHand,
+  type ApiCard,
+  type ApiTableState,
+} from "@/lib/api";
 
-type Player = {
-  name: string;
-  stack: number;
-  status: string;
-  avatar: string;
-  position: string;
-};
-
-type Card = {
-  label: string;
-  suit: "spades" | "hearts" | "clubs" | "diamonds";
-};
-
-const players: Player[] = [
-  {
-    name: "Maverick",
-    stack: 1450,
-    status: "Raises 2BB",
-    avatar: "🂡",
-    position: "top-6 left-1/2 -translate-x-1/2",
-  },
-  {
-    name: "Aurora",
-    stack: 1875,
-    status: "Calls instantly",
-    avatar: "🂮",
-    position: "top-1/2 left-4 -translate-y-1/2",
-  },
-  {
-    name: "NeonFox",
-    stack: 980,
-    status: "Thinking...",
-    avatar: "🂭",
-    position: "top-1/2 right-6 -translate-y-1/2",
-  },
-  {
-    name: "Shade",
-    stack: 2200,
-    status: "Hero call",
-    avatar: "🂱",
-    position: "bottom-6 left-16",
-  },
-  {
-    name: "Lumen",
-    stack: 1610,
-    status: "Dealer",
-    avatar: "🂽",
-    position: "bottom-6 right-16",
-  },
+const seatPositions = [
+  "bottom-6 left-1/2 -translate-x-1/2",
+  "left-6 bottom-1/4",
+  "left-6 top-1/4",
+  "right-6 top-1/4",
+  "right-6 bottom-1/4",
 ];
 
-const cardStages: Card[][] = [
-  [
-    { label: "A", suit: "spades" },
-    { label: "K", suit: "spades" },
-  ],
-  [
-    { label: "J", suit: "spades" },
-    { label: "10", suit: "spades" },
-    { label: "Q", suit: "spades" },
-  ],
-  [
-    { label: "2", suit: "clubs" },
-    { label: "A", suit: "hearts" },
-    { label: "K", suit: "spades" },
-    { label: "Q", suit: "spades" },
-    { label: "10", suit: "spades" },
-  ],
-];
-
-const liveFeed = [
-  { action: "Shade bluffs all-in for 2.3 ETH", time: "12:56" },
-  { action: "Maverick snap calls with nut flush", time: "12:55" },
-  { action: "Aurora folds queens face-up", time: "12:54" },
-  { action: "Pot swells to 4.8 ETH", time: "12:53" },
-];
-
-const suitColor: Record<Card["suit"], string> = {
-  spades: "text-slate-100",
-  clubs: "text-emerald-300",
-  hearts: "text-rose-300",
-  diamonds: "text-cyan-200",
+const colorMap: Record<string, string> = {
+  slate: "text-slate-100",
+  rose: "text-rose-300",
+  cyan: "text-cyan-300",
+  emerald: "text-emerald-300",
 };
 
-const suitSymbol: Record<Card["suit"], string> = {
-  spades: "♠",
-  clubs: "♣",
-  hearts: "♥",
-  diamonds: "♦",
+const actionLabels: Record<string, string> = {
+  fold: "Fold",
+  call: "Call",
+  raise: "Raise",
+  check: "Check",
+  bet: "Bet",
+  "new-hand": "New hand",
 };
 
 export function PokerTable() {
-  const [activeSeat, setActiveSeat] = useState(0);
-  const [stageIndex, setStageIndex] = useState(0);
+  const [table, setTable] = useState<ApiTableState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const hero = useMemo(() => table?.players.find((player) => player.isHero) ?? null, [table]);
+  const boardCards = useMemo(() => {
+    if (!table) return [] as (ApiCard | null)[];
+    const padded = [...table.board];
+    while (padded.length < 5) {
+      padded.push(null);
+    }
+    return padded;
+  }, [table]);
+
+  const loadTable = async () => {
+    try {
+      const snapshot = await fetchTableState();
+      setTable(snapshot);
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to reach the poker engine.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const seatInterval = setInterval(() => {
-      setActiveSeat((prev) => (prev + 1) % players.length);
-    }, 3200);
-
-    return () => clearInterval(seatInterval);
+    let mounted = true;
+    const bootstrap = async () => {
+      if (!mounted) return;
+      await loadTable();
+    };
+    bootstrap();
+    const interval = setInterval(() => {
+      loadTable();
+    }, 4000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
-  useEffect(() => {
-    const cardsInterval = setInterval(() => {
-      setStageIndex((prev) => (prev + 1) % cardStages.length);
-    }, 5200);
+  const runAction = async (action: string) => {
+    setActionLoading(true);
+    setError(null);
+    try {
+      const updated =
+        action === "new-hand" ? await requestNewHand() : await requestHeroAction(action);
+      setTable(updated);
+    } catch (err) {
+      console.error(err);
+      setError("Action failed. Please try again.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
-    return () => clearInterval(cardsInterval);
-  }, []);
+  const callAmount = useMemo(() => {
+    if (!table || !hero) return 0;
+    return Math.max(0, table.currentBet - hero.bet);
+  }, [table, hero]);
 
-  const currentCards = useMemo(() => cardStages[stageIndex], [stageIndex]);
-  const potSize = useMemo(() => 4.8 + stageIndex * 0.4, [stageIndex]);
+  const stageCopy = table?.stage ? table.stage.toUpperCase() : "IDLE";
+  const actionButtons = table?.heroOptions ?? [];
 
   return (
     <section className="glass-panel relative mt-16 overflow-hidden border border-white/10 p-6 shadow-[0_45px_120px_rgba(2,6,23,0.8)]">
@@ -130,18 +122,17 @@ export function PokerTable() {
               <Sparkles className="h-4 w-4 text-emerald-300" />
               Live Texas Hold&apos;em Arena
             </p>
-            <h2 className="mt-2 text-3xl font-semibold text-white">
-              Neon Mirage High Stakes Table
-            </h2>
+            <h2 className="mt-2 text-3xl font-semibold text-white">Nebula Mirage Feature Table</h2>
+            <p className="text-sm text-slate-400">Stage · {stageCopy}</p>
           </div>
           <div className="flex gap-3 text-sm text-slate-400">
             <div className="rounded-2xl border border-white/10 px-4 py-2 text-right">
-              <p className="text-xs uppercase tracking-[0.3em]">Blind Level</p>
-              <p className="text-lg font-semibold text-white">20 / 40</p>
+              <p className="text-xs uppercase tracking-[0.3em]">Pot</p>
+              <p className="text-lg font-semibold text-white">{table?.pot ?? 0} chips</p>
             </div>
             <div className="rounded-2xl border border-white/10 px-4 py-2 text-right">
               <p className="text-xs uppercase tracking-[0.3em]">Players</p>
-              <p className="text-lg font-semibold text-white">05</p>
+              <p className="text-lg font-semibold text-white">{table?.players.length ?? 0}</p>
             </div>
           </div>
         </header>
@@ -150,21 +141,11 @@ export function PokerTable() {
           <div className="relative overflow-hidden rounded-[32px] border border-slate-700/60 bg-gradient-to-br from-emerald-900/20 via-slate-900 to-slate-950 p-8">
             <div className="absolute inset-0 rounded-[32px] bg-[radial-gradient(circle,_rgba(16,185,129,0.2),transparent_60%)]" />
             <div className="relative z-10">
-              <motion.div
-                key={stageIndex}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-                className="mx-auto flex w-fit flex-col items-center justify-center rounded-2xl border border-emerald-400/30 bg-slate-950/70 px-6 py-4 text-center"
-              >
-                <p className="text-xs uppercase tracking-[0.4em] text-emerald-200/80">
-                  Pot Size
-                </p>
-                <p className="text-3xl font-bold text-white">
-                  {potSize.toFixed(1)} ETH
-                </p>
-                <p className="text-xs text-slate-400">Multiplier ×{(1.5 + stageIndex * 0.25).toFixed(1)}</p>
-              </motion.div>
+              <div className="mx-auto flex w-fit flex-col items-center justify-center rounded-2xl border border-emerald-400/30 bg-slate-950/70 px-6 py-4 text-center">
+                <p className="text-xs uppercase tracking-[0.4em] text-emerald-200/80">Pot Size</p>
+                <p className="text-3xl font-bold text-white">{table?.pot ?? 0} chips</p>
+                <p className="text-xs text-slate-400">Current bet · {table?.currentBet ?? 0}</p>
+              </div>
 
               <div className="relative mt-8 h-[380px]">
                 <div className="absolute inset-16 rounded-[200px] border border-emerald-300/40 bg-gradient-to-b from-emerald-900/70 to-slate-900 shadow-inner shadow-emerald-700/40" />
@@ -172,17 +153,26 @@ export function PokerTable() {
                   <p className="text-xs uppercase tracking-[0.5em] text-slate-400">Board</p>
                   <div className="flex gap-3">
                     <AnimatePresence mode="wait" initial={false}>
-                      {currentCards.map((card, index) => (
+                      {boardCards.map((card, index) => (
                         <motion.div
-                          key={`${stageIndex}-${card.label}-${card.suit}-${index}`}
+                          key={`${card?.code ?? "blank"}-${index}`}
                           initial={{ opacity: 0, y: 40, rotate: -15 + index * 6 }}
                           animate={{ opacity: 1, y: 0, rotate: -6 + index * 3 }}
                           exit={{ opacity: 0, y: -40, rotate: 10 }}
                           transition={{ duration: 0.5, delay: index * 0.08 }}
-                          className="relative h-28 w-20 rounded-2xl border border-white/20 bg-slate-900/90 px-3 py-4 text-center text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(2,6,23,0.85)]"
+                          className={clsx(
+                            "relative h-28 w-20 rounded-2xl border border-white/10 bg-slate-900/90 px-3 py-4 text-center text-2xl font-semibold text-white shadow-[0_20px_45px_rgba(2,6,23,0.85)]",
+                            !card && "opacity-40",
+                          )}
                         >
-                          <span className={clsx("block text-3xl", suitColor[card.suit])}>{card.label}</span>
-                          <span className={clsx("text-lg", suitColor[card.suit])}>{suitSymbol[card.suit]}</span>
+                          {card ? (
+                            <>
+                              <span className={clsx("block text-3xl", colorMap[card.color] ?? "text-slate-100")}>{card.label}</span>
+                              <span className={clsx("text-lg", colorMap[card.color] ?? "text-slate-100")}>{card.symbol}</span>
+                            </>
+                          ) : (
+                            <span className="text-sm text-slate-500">?</span>
+                          )}
                           <span className="absolute inset-1 rounded-2xl border border-white/5" />
                         </motion.div>
                       ))}
@@ -190,19 +180,18 @@ export function PokerTable() {
                   </div>
                 </div>
 
-                {players.map((player, index) => (
+                {(table?.players ?? []).map((player) => (
                   <motion.div
-                    key={player.name}
-                    animate={{
-                      scale: activeSeat === index ? 1.05 : 1,
-                      filter: activeSeat === index ? "brightness(1.15)" : "brightness(0.9)",
-                    }}
-                    transition={{ duration: 0.4, ease: "easeOut" }}
+                    key={player.id}
                     className={clsx(
                       "absolute flex w-48 flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-slate-100 shadow-lg backdrop-blur",
-                      player.position,
-                      activeSeat === index ? "ring-2 ring-emerald-300/80" : "opacity-80",
+                      seatPositions[player.seat] ?? "top-1/2 left-1/2 -translate-x-1/2",
+                      player.folded && "opacity-60",
+                      player.isHero && "ring-2 ring-emerald-300/80",
                     )}
+                    animate={{
+                      scale: player.isHero ? 1.05 : 1,
+                    }}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -213,88 +202,115 @@ export function PokerTable() {
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-300">
                       <span>Stack</span>
-                      <strong className="text-lg text-white">{player.stack} BB</strong>
+                      <strong className="text-lg text-white">{player.stack}</strong>
                     </div>
-                    <div className="chip-stack">
-                      <span style={{ height: "16px" }} />
-                      <span />
-                      <span style={{ height: "28px" }} />
-                    </div>
+                    {player.isHero && (
+                      <div className="flex gap-2">
+                        {player.hand.map((card) => (
+                          <div
+                            key={card.code}
+                            className="flex h-12 w-8 flex-col items-center justify-center rounded-xl border border-white/20 bg-slate-900 text-white"
+                          >
+                            <span className={clsx("text-lg", colorMap[card.color] ?? "text-slate-100")}>{card.label}</span>
+                            <span className={clsx("text-xs", colorMap[card.color] ?? "text-slate-100")}>{card.symbol}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col gap-6">
-            <div className="glow-ring glass-panel relative overflow-hidden p-5">
+          <div className="flex flex-col gap-4">
+            <div className="glass-panel flex flex-col gap-4 p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Momentum</p>
-                  <p className="text-2xl font-semibold text-white">Aggressive table</p>
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Your move</p>
+                  <p className="text-lg text-white">Choose an action</p>
                 </div>
-                <Flame className="h-10 w-10 text-rose-400" />
+                <Timer className="h-6 w-6 text-cyan-300" />
               </div>
-              <p className="mt-2 text-sm text-slate-300">
-                Expect fireworks – average VPIP is 48% and pots are 3.2× higher than last orbit.
-              </p>
-              <div className="mt-4 h-1.5 w-full rounded-full bg-white/10">
-                <motion.span
-                  key={stageIndex}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${60 + stageIndex * 15}%` }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="block h-full rounded-full bg-gradient-to-r from-rose-400 via-amber-300 to-emerald-300"
-                />
+              <div className="flex flex-wrap gap-3">
+                {actionButtons.map((action) => (
+                  <button
+                    key={action}
+                    disabled={actionLoading}
+                    onClick={() => runAction(action)}
+                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/70 disabled:opacity-50"
+                  >
+                    {getActionLabel(action, callAmount, table?.minRaise ?? 0)}
+                  </button>
+                ))}
               </div>
+              {table?.winner && (
+                <div className="rounded-2xl border border-amber-300/40 bg-amber-400/10 p-4 text-sm text-amber-100">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.4em]">
+                    <Trophy className="h-4 w-4" /> Winner
+                  </div>
+                  <p className="mt-2 text-lg font-semibold text-white">{table.winner.players.join(" & ")}</p>
+                  {table.winner.rank && <p className="text-xs text-amber-200">{table.winner.rank}</p>}
+                </div>
+              )}
+              {error && (
+                <div className="rounded-2xl border border-rose-400/40 bg-rose-400/10 p-3 text-sm text-rose-100">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    {error}
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={() => runAction("new-hand")}
+                className="btn-primary flex items-center justify-center gap-2"
+                disabled={actionLoading}
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start new hand"}
+              </button>
             </div>
 
-            <div className="glass-panel p-5">
+            <div className="glass-panel flex flex-col gap-4 p-5">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400">
-                <Timer className="h-4 w-4 text-cyan-300" />
-                Action Feed
+                <Flame className="h-4 w-4 text-rose-300" /> Live feed
               </div>
-              <div className="gradient-divider my-4" />
               <ul className="flex flex-col gap-3 text-sm text-slate-300">
-                {liveFeed.map((item) => (
-                  <li key={item.time} className="flex items-start justify-between">
-                    <span className="max-w-[220px] text-white/90">{item.action}</span>
-                    <span className="text-xs text-slate-500">{item.time}</span>
+                {(table?.log ?? []).map((entry) => (
+                  <li key={entry} className="border-b border-white/5 pb-2 last:border-b-0 last:pb-0">
+                    {entry}
                   </li>
                 ))}
+                {!table?.log?.length && <li>No recent actions.</li>}
               </ul>
-            </div>
-
-            <div className="glass-panel p-5">
-              <div className="flex items-center gap-3">
-                <Trophy className="h-10 w-10 text-amber-300" />
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Upcoming Feature Table</p>
-                  <h4 className="text-xl font-semibold text-white">Nebula Masters · Day 1</h4>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-slate-300">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Buy-in</p>
-                  <p className="text-white">1.5 ETH</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Seats</p>
-                  <p className="text-white">Max 9</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Start</p>
-                  <p className="text-white">20:00 UTC</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Format</p>
-                  <p className="text-white">Deep Stack</p>
-                </div>
-              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80">
+          <div className="flex items-center gap-3 text-sm text-slate-200">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Connecting to poker engine...
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+function getActionLabel(action: string, callAmount: number, minRaise: number) {
+  if (action === "call" && callAmount > 0) {
+    return `${actionLabels[action]} ${callAmount}`;
+  }
+  if (action === "raise") {
+    return `${actionLabels[action]} +${minRaise}`;
+  }
+  if (action === "bet") {
+    return "Bet";
+  }
+  if (action === "new-hand") {
+    return "Start new hand";
+  }
+  return actionLabels[action] ?? action;
 }

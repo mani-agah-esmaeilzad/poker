@@ -1,11 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import {
-  DEMO_STORAGE_KEY,
-  DemoUserProfile,
-  verifyDemoCredentials,
-} from "@/lib/demoAuth";
+import { useEffect, useState } from "react";
+import { DEMO_STORAGE_KEY, DemoUserProfile } from "@/lib/demoAuth";
+import { loginRequest } from "@/lib/api";
 
 function readStoredUser(): DemoUserProfile | null {
   if (typeof window === "undefined") return null;
@@ -20,17 +17,34 @@ function readStoredUser(): DemoUserProfile | null {
 }
 
 export function useDemoSession() {
-  const [user, setUser] = useState<DemoUserProfile | null>(() => readStoredUser());
-  const hydrated = typeof window !== "undefined";
+  const [user, setUser] = useState<DemoUserProfile | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
-  const login = (email: string, password: string) => {
-    const profile = verifyDemoCredentials(email, password);
-    if (!profile) {
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      const stored = readStoredUser();
+      if (stored) {
+        setUser(stored);
+      }
+      setHydrated(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    try {
+      const profile = await loginRequest(email, password);
+      window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(profile));
+      setUser(profile);
+      return profile;
+    } catch (error) {
+      console.error("Login failed", error);
       return null;
     }
-    window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(profile));
-    setUser(profile);
-    return profile;
   };
 
   const logout = () => {

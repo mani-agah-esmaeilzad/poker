@@ -24,7 +24,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useDemoSession();
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStatus(null);
     setError(null);
@@ -33,7 +33,7 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    const profile = login(email, password);
+    const profile = await login(email, password);
     if (!profile) {
       setError("Invalid credentials. Use the provided demo account details.");
       setLoading(false);
