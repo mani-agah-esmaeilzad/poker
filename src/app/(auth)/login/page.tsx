@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, ShieldCheck, Sparkles } from "lucide-react";
+import { useDemoSession } from "@/hooks/useDemoSession";
+import { DEMO_USER } from "@/lib/demoAuth";
 
 const highlights = [
   "Biometric failover keys",
@@ -16,13 +19,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const { login } = useDemoSession();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setStatus("Logging you into the lobby...");
+    setStatus(null);
+    setError(null);
+    if (!email.trim() || !password.trim()) {
+      setError("Enter both your email and password.");
+      return;
+    }
+    setLoading(true);
+    const profile = login(email, password);
+    if (!profile) {
+      setError("Invalid credentials. Use the provided demo account details.");
+      setLoading(false);
+      return;
+    }
+    setStatus(`Welcome back, ${profile.name}. Redirecting you to the table...`);
     setTimeout(() => {
-      setStatus("Success! Redirecting you to tonight's feature table.");
-    }, 1200);
+      router.push("/");
+      setLoading(false);
+    }, 1000);
   };
 
   return (
@@ -98,14 +119,26 @@ export default function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <button type="submit" className="btn-primary mt-2 flex items-center justify-center gap-2 text-base">
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-primary mt-2 flex items-center justify-center gap-2 text-base disabled:opacity-60"
+          >
             Login
             <ArrowRight className="h-4 w-4" />
           </button>
+          {error && <p className="text-sm text-rose-300">{error}</p>}
           {status && <p className="text-sm text-emerald-300">{status}</p>}
           <p className="text-sm text-slate-400">
             Need an account? <Link href="/register" className="text-white">Register now</Link>
           </p>
+          <div className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 p-4 text-sm text-cyan-100">
+            <p className="text-xs uppercase tracking-[0.4em]">Demo credentials</p>
+            <div className="mt-2 flex flex-col gap-1">
+              <span>Email: <strong>{DEMO_USER.email}</strong></span>
+              <span>Password: <strong>{DEMO_USER.password}</strong></span>
+            </div>
+          </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em]">
               <Sparkles className="h-4 w-4 text-amber-300" /> Featured login perks

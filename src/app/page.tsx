@@ -19,6 +19,8 @@ import { BlindStructure } from "@/components/sections/BlindStructure";
 import { PayoutMatrix } from "@/components/sections/PayoutMatrix";
 import { LeaderboardPanel } from "@/components/sections/LeaderboardPanel";
 import { RebuyLateEntry } from "@/components/sections/RebuyLateEntry";
+import { useDemoSession } from "@/hooks/useDemoSession";
+import { SessionBadge } from "@/components/auth/SessionBadge";
 
 const features: { title: string; description: string; Icon: LucideIcon; accent: string }[] = [
   {
@@ -60,6 +62,7 @@ const timeline = [
 ];
 
 export default function Home() {
+  const { user, hydrated, logout } = useDemoSession();
   return (
     <div className="relative min-h-screen overflow-hidden px-4 pb-28 pt-8 sm:px-8 lg:px-16">
       <div className="floating-chip" style={{ top: "12%", right: "12%" }} />
@@ -81,12 +84,18 @@ export default function Home() {
             </Link>
           </nav>
           <div className="flex gap-2 text-sm">
-            <Link href="/login" className="btn-ghost">
-              Login
-            </Link>
-            <Link href="/register" className="btn-primary">
-              Register
-            </Link>
+            {hydrated && user ? (
+              <SessionBadge user={user} onLogout={logout} />
+            ) : (
+              <>
+                <Link href="/login" className="btn-ghost">
+                  Login
+                </Link>
+                <Link href="/register" className="btn-primary">
+                  Register
+                </Link>
+              </>
+            )}
           </div>
         </header>
 
